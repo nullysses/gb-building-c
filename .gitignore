@@ -1,2 +1,25 @@
 # Editor
 .vscode/
+
+# Local build output
+build/
+
+# Intermediate compiler/toolchain files
+*.map
+*.noi
+*.sym
+*.lst
+*.rel
+*.ihx
+*.asm
+*.o
+
+# Generated GBDK assets from png2asset
+src/brickwall.c
+src/brickwall.h
+src/floor.c
+src/floor.h
+src/crate.c
+src/crate.h
+src/robot.c
+src/robot.h
