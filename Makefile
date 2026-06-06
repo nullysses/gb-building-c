@@ -6,6 +6,7 @@ PNG2ASSET := $(GBDKDIR)bin/png2asset
 
 EMU ?= sameboy
 ROM := build/demo001.gb
+DIST_ROM := dist/demo001.gb
 
 ASSETS := \
 	src/brickwall.c \
@@ -62,6 +63,10 @@ run: $(ROM)
 >$(EMU) $(ROM)
 
 rebuild: clean all
+
+dist: $(ROM)
+>mkdir -p dist
+>cp $(ROM) $(DIST_ROM)
 
 check:
 >@echo "GBDKDIR=$(GBDKDIR)"
