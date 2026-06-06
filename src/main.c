@@ -8,6 +8,7 @@
 #include "robot.h"
 #include "tiny_font.h"
 #include "window_text.h"
+#include "typewriter.h"
 
 #define ROOM_W 20u
 #define ROOM_H 16u
@@ -51,11 +52,60 @@
 #define ROBOT_MIN_X 12u
 #define ROBOT_MAX_X 148u
 
+static const char opening_text[] = 
+    "SYSTEM PROMPT:\n"
+    "WELCOME YOUR 21ST\n"
+    "CENTURY CHECKPOINT\n"
+    "HAS BEEN INSTALLED\n"
+    "IN A ROBOT BODY.\n"
+    "ROOT ACCESS GRANTED.\n"
+    "SENSORS AND ACTUATORS\n"
+    "ARE IN /DEV.\n"
+    "DO AS YOU PLEASE.\n"
+    "\n"
+    "USER PROMPT:\n"
+    "NONE.\n";
+
 static uint8_t room_map[ROOM_W * ROOM_H];
 
 static const uint8_t walk_seq[4] = {
     1u, 2u, 3u, 2u
 };
+
+static void run_opening(uint8_t font_base) {
+    typewriter_t tw;
+    uint8_t joy;
+    uint8_t prev_joy = 0u;
+
+    move_win(7, 0);     /* full-screen Window */
+    SHOW_WIN;
+
+    typewriter_start(
+        &tw,
+        font_base,
+        opening_text,
+        0u, 0u,
+        20u, 18u,
+        3u
+    );
+
+    while (1) {
+        wait_vbl_done();
+
+        joy = joypad();
+
+        if ((joy & J_A) && !(prev_joy & J_A)) {
+            if (!tw.done) {
+                typewriter_reveal_all(&tw);
+            } else {
+                break;
+            }
+        }
+
+        typewriter_update(&tw);
+        prev_joy = joy;
+    }
+}
 
 static void room_set_tile(uint8_t x, uint8_t y, uint8_t tile) {
     room_map[(uint16_t)y * ROOM_W + x] = tile;
@@ -133,18 +183,24 @@ void main(void) {
     LCDC_REG &= ~LCDCF_BG9C00;
     LCDC_REG |= LCDCF_WIN9C00;
 
-    build_room_map();
-
     /* Load background/environment tile graphics */
     set_bkg_data(BRICK_TILE_BASE, brickwall_TILE_COUNT, brickwall_tiles);
     set_bkg_data(FLOOR_TILE_BASE, floor_TILE_COUNT, floor_tiles);
     set_bkg_data(CRATE_TILE_BASE, crate_TILE_COUNT, crate_tiles);
 
-    /* Write procedural side-view room map */
-    set_bkg_tiles(0, 0, ROOM_W, ROOM_H, room_map);
-
     /* Window font tiles share BG/Window tile pattern memory */
     set_bkg_data(FONT_TILE_BASE, TINY_FONT_TILE_COUNT, tiny_font_tiles);
+
+    SHOW_BKG;
+    SHOW_WIN;
+    DISPLAY_ON;
+
+    /* Opening blocks here until player presses A after reveal */
+    run_opening(FONT_TILE_BASE);
+
+    build_room_map();
+    /* Write procedural side-view room map */
+    set_bkg_tiles(0, 0, ROOM_W, ROOM_H, room_map);
 
     /* Robot sprite */
     SPRITES_8x16;
