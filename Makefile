@@ -12,6 +12,7 @@ ASSETS := \
 	src/brickwall.c \
 	src/floor.c \
 	src/crate.c \
+	src/door.c \
 	src/robot.c
 
 C_SOURCES := \
@@ -19,6 +20,7 @@ C_SOURCES := \
 	src/brickwall.c \
 	src/floor.c \
 	src/crate.c \
+	src/door.c \
 	src/robot.c \
 	src/tiny_font.c \
 	src/window_text.c \
@@ -50,6 +52,14 @@ src/crate.c src/crate.h: assets/crate.png
 >	-noflip \
 >	-o src/crate.c
 
+src/door.c src/door.h: assets/door.png
+>$(PNG2ASSET) assets/door.png \
+>	-map \
+>	-keep_palette_order \
+>	-keep_duplicate_tiles \
+>	-noflip \
+>	-o src/door.c
+
 src/robot.c src/robot.h: assets/robot.png
 >$(PNG2ASSET) assets/robot.png \
 >	-spr8x16 \
@@ -78,6 +88,7 @@ check:
 >@test -f assets/brickwall.png || (echo "Missing assets/brickwall.png" && exit 1)
 >@test -f assets/floor.png || (echo "Missing assets/floor.png" && exit 1)
 >@test -f assets/crate.png || (echo "Missing assets/crate.png" && exit 1)
+>@test -f assets/door.png || (echo "Missing assets/door.png" && exit 1)
 >@test -f assets/robot.png || (echo "Missing assets/robot.png" && exit 1)
 >@echo "Toolchain and assets look present."
 
@@ -87,4 +98,5 @@ clean:
 >rm -f src/brickwall.c src/brickwall.h
 >rm -f src/floor.c src/floor.h
 >rm -f src/crate.c src/crate.h
+>rm -f src/door.c src/door.h
 >rm -f src/robot.c src/robot.h

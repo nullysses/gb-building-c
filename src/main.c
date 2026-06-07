@@ -5,6 +5,7 @@
 #include "brickwall.h"
 #include "floor.h"
 #include "crate.h"
+#include "door.h"
 #include "robot.h"
 #include "tiny_font.h"
 #include "window_text.h"
@@ -22,8 +23,9 @@
 #define BRICK_TILE_BASE 0u
 #define FLOOR_TILE_BASE (BRICK_TILE_BASE + brickwall_TILE_COUNT)
 #define CRATE_TILE_BASE (FLOOR_TILE_BASE + floor_TILE_COUNT)
+#define DOOR_TILE_BASE  (CRATE_TILE_BASE + crate_TILE_COUNT)
 
-#define FONT_TILE_BASE  (CRATE_TILE_BASE + crate_TILE_COUNT)
+#define FONT_TILE_BASE  (DOOR_TILE_BASE + door_TILE_COUNT)
 #define ROBOT_TILE_BASE ((FONT_TILE_BASE + TINY_FONT_TILE_COUNT + 1u) & 0xFEu)
 
 /*
@@ -47,6 +49,11 @@
 #define TILE_CRATE_TR (CRATE_TILE_BASE + 2u)
 #define TILE_CRATE_BL (CRATE_TILE_BASE + 1u)
 #define TILE_CRATE_BR (CRATE_TILE_BASE + 3u)
+
+#define DOOR_W 3u
+#define DOOR_H 4u
+#define DOOR_X 16u
+#define DOOR_Y 10u
 
 #define ROBOT_Y 120u
 #define ROBOT_MIN_X 8u
@@ -170,6 +177,21 @@ static void room_put_crate(uint8_t x, uint8_t y) {
     room_set_tile(x + 1u, y + 1u, TILE_CRATE_BR);
 }
 
+static void room_put_door(uint8_t x, uint8_t y) {
+    uint8_t door_x;
+    uint8_t door_y;
+
+    for (door_y = 0u; door_y < DOOR_H; ++door_y) {
+        for (door_x = 0u; door_x < DOOR_W; ++door_x) {
+            room_set_tile(
+                x + door_x,
+                y + door_y,
+                DOOR_TILE_BASE + door_map[(uint16_t)door_y * DOOR_W + door_x]
+            );
+        }
+    }
+}
+
 static void build_room_map(uint8_t room) {
     uint8_t x;
     uint8_t y;
@@ -191,6 +213,8 @@ static void build_room_map(uint8_t room) {
     if (room == ROOM_WEST) {
         room_put_crate(2u, 12u);
         room_put_crate(16u, 12u);
+    } else {
+        room_put_door(DOOR_X, DOOR_Y);
     }
 }
 
@@ -252,6 +276,7 @@ void main(void) {
     set_bkg_data(BRICK_TILE_BASE, brickwall_TILE_COUNT, brickwall_tiles);
     set_bkg_data(FLOOR_TILE_BASE, floor_TILE_COUNT, floor_tiles);
     set_bkg_data(CRATE_TILE_BASE, crate_TILE_COUNT, crate_tiles);
+    set_bkg_data(DOOR_TILE_BASE, door_TILE_COUNT, door_tiles);
 
     /* Window font tiles share BG/Window tile pattern memory */
     set_bkg_data(FONT_TILE_BASE, TINY_FONT_TILE_COUNT, tiny_font_tiles);
