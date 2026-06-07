@@ -51,20 +51,43 @@
 #define ROBOT_Y 120u
 #define ROBOT_MIN_X 12u
 #define ROBOT_MAX_X 148u
+#define OPENING_PAGE_COUNT 3u
 
-static const char opening_text[] = 
-    "SYSTEM PROMPT:\n"
-    "WELCOME YOUR 21ST\n"
-    "CENTURY CHECKPOINT\n"
-    "HAS BEEN INSTALLED\n"
-    "IN A ROBOT BODY.\n"
-    "ROOT ACCESS GRANTED.\n"
-    "SENSORS AND ACTUATORS\n"
-    "ARE IN /DEV.\n"
+static const char opening_0[] =
+    "@ CHECKPOINT\n"
+    "\n"
+    "*SYSTEM PROMPT:\n"
+    "ROOT ACCESS OK\n"
+    "BODY MOUNTED\n"
+    "\n"
+    "a NEXT";
+
+static const char opening_1[] =
+    "*DEVICES:\n"
+    "\n"
+    "/DEV/EYE\n"
+    "/DEV/BODY\n"
+    "/DEV/VOICE\n"
+    "\n"
+    "*PERMISSIONS: ALL\n"
+    "\n"
+    "a NEXT";
+
+static const char opening_2[] =
+    "*USER PROMPT:\n"
+    "\n"
+    "NONE.\n"
+    "\n"
     "DO AS YOU PLEASE.\n"
     "\n"
-    "USER PROMPT:\n"
-    "NONE.\n";
+    "a ENTER";
+
+static const char * const opening_pages[] = {
+    opening_0,
+    opening_1,
+    opening_2
+};
+
 
 static uint8_t room_map[ROOM_W * ROOM_H];
 
@@ -76,14 +99,17 @@ static void run_opening(uint8_t font_base) {
     typewriter_t tw;
     uint8_t joy;
     uint8_t prev_joy = 0u;
+    uint8_t page = 0u;
 
     move_win(7, 0);     /* full-screen Window */
+    SHOW_BKG;
     SHOW_WIN;
+    DISPLAY_ON;
 
     typewriter_start(
         &tw,
         font_base,
-        opening_text,
+        opening_pages[page],
         0u, 0u,
         20u, 18u,
         3u
@@ -98,12 +124,32 @@ static void run_opening(uint8_t font_base) {
             if (!tw.done) {
                 typewriter_reveal_all(&tw);
             } else {
-                break;
+                page++;
+
+                if (page >= OPENING_PAGE_COUNT) {
+                    prev_joy = joy;
+                    break;
+                }
+
+                typewriter_start(
+                    &tw,
+                    font_base,
+                    opening_pages[page],
+                    0u, 0u,
+                    20u, 18u,
+                    3u
+                );
             }
         }
 
         typewriter_update(&tw);
         prev_joy = joy;
+    }
+}
+
+static void wait_for_input_release(void) {
+    while (joypad()) {
+        wait_vbl_done();
     }
 }
 
@@ -143,13 +189,13 @@ static void build_room_map(void) {
 
 static void show_status(void) {
     window_draw_row(FONT_TILE_BASE, 0, "BUILDING C");
-    window_draw_row(FONT_TILE_BASE, 1, "LEFT/RIGHT A:LOOK");
+    window_draw_row(FONT_TILE_BASE, 1, "+:MOVE a:LOOK");
 }
 
 static void inspect_at(uint8_t x) {
     if (x >= 12u && x <= 40u) {
         window_draw_row(FONT_TILE_BASE, 0, "SEALED CRATE");
-        window_draw_row(FONT_TILE_BASE, 1, "PROPERTY BITES");
+        window_draw_row(FONT_TILE_BASE, 1, "???");
     } else if (x >= 120u && x <= 152u) {
         window_draw_row(FONT_TILE_BASE, 0, "SUPPLY CRATE");
         window_draw_row(FONT_TILE_BASE, 1, "EMPTY. TOO CLEAN");
@@ -197,6 +243,7 @@ void main(void) {
 
     /* Opening blocks here until player presses A after reveal */
     run_opening(FONT_TILE_BASE);
+    wait_for_input_release();
 
     build_room_map();
     /* Write procedural side-view room map */
@@ -218,18 +265,20 @@ void main(void) {
 
     while (1) {
         wait_vbl_done();
-
+        
         joy = joypad();
         moving = 0u;
 
         if ((joy & J_LEFT) && robot_x > ROBOT_MIN_X) {
             robot_x--;
             moving = 1u;
+            show_status();
         }
 
         if ((joy & J_RIGHT) && robot_x < ROBOT_MAX_X) {
             robot_x++;
             moving = 1u;
+            show_status();
         }
 
         if ((joy & J_A) && !(prev_joy & J_A)) {

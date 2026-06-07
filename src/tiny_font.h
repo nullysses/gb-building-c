@@ -3,10 +3,10 @@
 
 #include <stdint.h>
 
-#define TINY_FONT_TILE_COUNT 42
-#define TINY_FONT_CHARS " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/:.-!"
+#define TINY_FONT_TILE_COUNT 55
+#define TINY_FONT_CHARS " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/:.-!?@ab+<>^vx*se"
 
-extern const uint8_t tiny_font_tiles[672];
+extern const uint8_t tiny_font_tiles[];
 
 /*
  * Returns the tile ID for c, assuming tiny_font_tiles was loaded at tile_base.
