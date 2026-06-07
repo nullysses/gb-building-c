@@ -66,6 +66,16 @@
 #define ROBOT_FACE_RIGHT 0u
 #define ROBOT_FACE_LEFT  1u
 
+#define HOTSPOT_COUNT ((uint8_t)(sizeof(hotspots) / sizeof(hotspots[0])))
+
+typedef struct hotspot_t {
+    uint8_t room;
+    uint8_t x_min;
+    uint8_t x_max;
+    const char *line_0;
+    const char *line_1;
+} hotspot_t;
+
 static const char opening_0[] =
     "@ CHECKPOINT\n"
     "\n"
@@ -101,6 +111,13 @@ static const char * const opening_pages[] = {
     opening_2
 };
 
+static const hotspot_t hotspots[] = {
+    { ROOM_WEST, 12u, 40u,   "SEALED CRATE",  "???" },
+    { ROOM_WEST, 70u, 96u,   "WALL SENSOR",   "IT WATCHES YOU" },
+    { ROOM_WEST, 120u, 152u, "SUPPLY CRATE",  "EMPTY. TOO CLEAN" },
+    { ROOM_EAST, 70u, 96u,   "WALL SENSOR",   "IT WATCHES YOU" },
+    { ROOM_EAST, 128u, 160u, "DOOR LOCKED",   "NO PROMPT FOUND" }
+};
 
 static uint8_t room_map[ROOM_W * ROOM_H];
 
@@ -234,19 +251,24 @@ static void show_status(uint8_t room) {
 }
 
 static void inspect_at(uint8_t room, uint8_t x) {
-    if (room == ROOM_WEST && x >= 12u && x <= 40u) {
-        window_draw_row(FONT_TILE_BASE, 0, "SEALED CRATE");
-        window_draw_row(FONT_TILE_BASE, 1, "???");
-    } else if (room == ROOM_WEST && x >= 120u && x <= 152u) {
-        window_draw_row(FONT_TILE_BASE, 0, "SUPPLY CRATE");
-        window_draw_row(FONT_TILE_BASE, 1, "EMPTY. TOO CLEAN");
-    } else if (x >= 70u && x <= 96u) {
-        window_draw_row(FONT_TILE_BASE, 0, "WALL SENSOR");
-        window_draw_row(FONT_TILE_BASE, 1, "IT WATCHES YOU");
-    } else {
-        window_draw_row(FONT_TILE_BASE, 0, "BRICK. DUST.");
-        window_draw_row(FONT_TILE_BASE, 1, "BUILDING C BREATHES");
+    uint8_t i;
+
+    for (i = 0u; i < HOTSPOT_COUNT; ++i) {
+        const hotspot_t *hotspot = &hotspots[i];
+
+        if (
+            hotspot->room == room &&
+            x >= hotspot->x_min &&
+            x <= hotspot->x_max
+        ) {
+            window_draw_row(FONT_TILE_BASE, 0, hotspot->line_0);
+            window_draw_row(FONT_TILE_BASE, 1, hotspot->line_1);
+            return;
+        }
     }
+
+    window_draw_row(FONT_TILE_BASE, 0, "BRICK. DUST.");
+    window_draw_row(FONT_TILE_BASE, 1, "BUILDING C BREATHES");
 }
 
 void main(void) {
