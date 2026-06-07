@@ -49,9 +49,15 @@
 #define TILE_CRATE_BR (CRATE_TILE_BASE + 3u)
 
 #define ROBOT_Y 120u
-#define ROBOT_MIN_X 12u
-#define ROBOT_MAX_X 148u
+#define ROBOT_MIN_X 8u
+#define ROBOT_MAX_X 160u
 #define OPENING_PAGE_COUNT 3u
+
+#define ROOM_WEST 0u
+#define ROOM_EAST 1u
+
+#define ROBOT_FACE_RIGHT 0u
+#define ROBOT_FACE_LEFT  1u
 
 static const char opening_0[] =
     "@ CHECKPOINT\n"
@@ -164,7 +170,7 @@ static void room_put_crate(uint8_t x, uint8_t y) {
     room_set_tile(x + 1u, y + 1u, TILE_CRATE_BR);
 }
 
-static void build_room_map(void) {
+static void build_room_map(uint8_t room) {
     uint8_t x;
     uint8_t y;
 
@@ -182,21 +188,32 @@ static void build_room_map(void) {
         }
     }
 
-    /* Props */
-    room_put_crate(2u, 12u);
-    room_put_crate(16u, 12u);
+    if (room == ROOM_WEST) {
+        room_put_crate(2u, 12u);
+        room_put_crate(16u, 12u);
+    }
 }
 
-static void show_status(void) {
-    window_draw_row(FONT_TILE_BASE, 0, "BUILDING C");
+static void draw_room(uint8_t room) {
+    build_room_map(room);
+    set_bkg_tiles(0, 0, ROOM_W, ROOM_H, room_map);
+}
+
+static void show_status(uint8_t room) {
+    if (room == ROOM_EAST) {
+        window_draw_row(FONT_TILE_BASE, 0, "BUILDING C EAST");
+    } else {
+        window_draw_row(FONT_TILE_BASE, 0, "BUILDING C WEST");
+    }
+
     window_draw_row(FONT_TILE_BASE, 1, "+:MOVE a:LOOK");
 }
 
-static void inspect_at(uint8_t x) {
-    if (x >= 12u && x <= 40u) {
+static void inspect_at(uint8_t room, uint8_t x) {
+    if (room == ROOM_WEST && x >= 12u && x <= 40u) {
         window_draw_row(FONT_TILE_BASE, 0, "SEALED CRATE");
         window_draw_row(FONT_TILE_BASE, 1, "???");
-    } else if (x >= 120u && x <= 152u) {
+    } else if (room == ROOM_WEST && x >= 120u && x <= 152u) {
         window_draw_row(FONT_TILE_BASE, 0, "SUPPLY CRATE");
         window_draw_row(FONT_TILE_BASE, 1, "EMPTY. TOO CLEAN");
     } else if (x >= 70u && x <= 96u) {
@@ -210,6 +227,8 @@ static void inspect_at(uint8_t x) {
 
 void main(void) {
     uint8_t robot_x = 80u;
+    uint8_t room = ROOM_WEST;
+    uint8_t robot_facing = ROBOT_FACE_RIGHT;
     uint8_t robot_frame = 0u;
     uint8_t anim_timer = 0u;
     uint8_t walk_index = 0u;
@@ -245,9 +264,7 @@ void main(void) {
     run_opening(FONT_TILE_BASE);
     wait_for_input_release();
 
-    build_room_map();
-    /* Write procedural side-view room map */
-    set_bkg_tiles(0, 0, ROOM_W, ROOM_H, room_map);
+    draw_room(room);
 
     /* Robot sprite */
     SPRITES_8x16;
@@ -256,7 +273,7 @@ void main(void) {
     /* Bottom dialogue/status window */
     move_win(7, 128);
     window_clear(FONT_TILE_BASE);
-    show_status();
+    show_status(room);
 
     SHOW_BKG;
     SHOW_WIN;
@@ -269,25 +286,52 @@ void main(void) {
         joy = joypad();
         moving = 0u;
 
-        if ((joy & J_LEFT) && robot_x > ROBOT_MIN_X) {
-            robot_x--;
-            moving = 1u;
-            show_status();
+        if (joy & J_LEFT) {
+            if (robot_x > ROBOT_MIN_X) {
+                robot_x--;
+                moving = 1u;
+                robot_facing = ROBOT_FACE_LEFT;
+            } else if (room == ROOM_EAST) {
+                room = ROOM_WEST;
+                robot_x = ROBOT_MAX_X;
+                draw_room(room);
+                moving = 1u;
+                robot_facing = ROBOT_FACE_LEFT;
+            }
+
+            if (moving) {
+                show_status(room);
+            }
         }
 
-        if ((joy & J_RIGHT) && robot_x < ROBOT_MAX_X) {
-            robot_x++;
-            moving = 1u;
-            show_status();
+        if (joy & J_RIGHT) {
+            if (robot_x < ROBOT_MAX_X) {
+                robot_x++;
+                moving = 1u;
+                robot_facing = ROBOT_FACE_RIGHT;
+            } else if (room == ROOM_WEST) {
+                room = ROOM_EAST;
+                robot_x = ROBOT_MIN_X;
+                draw_room(room);
+                moving = 1u;
+                robot_facing = ROBOT_FACE_RIGHT;
+            }
+
+            if (moving) {
+                show_status(room);
+            }
         }
 
         if ((joy & J_A) && !(prev_joy & J_A)) {
-            inspect_at(robot_x);
+            inspect_at(room, robot_x);
         }
 
         if ((joy & J_START) && !(prev_joy & J_START)) {
+            room = ROOM_WEST;
             robot_x = 80u;
-            show_status();
+            robot_facing = ROBOT_FACE_RIGHT;
+            draw_room(room);
+            show_status(room);
         }
 
         if (moving) {
@@ -304,13 +348,24 @@ void main(void) {
             robot_frame = 0u;
         }
 
-        move_metasprite(
-            robot_metasprites[robot_frame],
-            ROBOT_TILE_BASE,
-            0,
-            robot_x,
-            ROBOT_Y
-        );
+        if (robot_facing == ROBOT_FACE_LEFT) {
+            move_metasprite_flipx(
+                robot_metasprites[robot_frame],
+                ROBOT_TILE_BASE,
+                0,
+                0,
+                robot_x,
+                ROBOT_Y
+            );
+        } else {
+            move_metasprite(
+                robot_metasprites[robot_frame],
+                ROBOT_TILE_BASE,
+                0,
+                robot_x,
+                ROBOT_Y
+            );
+        }
 
         prev_joy = joy;
     }
