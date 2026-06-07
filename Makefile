@@ -6,7 +6,7 @@ PNG2ASSET := $(GBDKDIR)bin/png2asset
 
 EMU ?= sameboy
 ROM := build/demo001.gb
-DIST_ROM := dist/demo001.gb
+DIST_ROM := dist/building_c.gb
 
 ASSETS := \
 	src/brickwall.c \
@@ -46,6 +46,8 @@ src/crate.c src/crate.h: assets/crate.png
 >$(PNG2ASSET) assets/crate.png \
 >	-tiles_only \
 >	-keep_palette_order \
+>	-keep_duplicate_tiles \
+>	-noflip \
 >	-o src/crate.c
 
 src/robot.c src/robot.h: assets/robot.png
@@ -81,6 +83,7 @@ check:
 
 clean:
 >rm -rf build
+>rm -rf dist
 >rm -f src/brickwall.c src/brickwall.h
 >rm -f src/floor.c src/floor.h
 >rm -f src/crate.c src/crate.h

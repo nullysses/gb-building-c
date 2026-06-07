@@ -23,3 +23,5 @@ src/crate.c
 src/crate.h
 src/robot.c
 src/robot.h
+src/dingbats.c
+src/dingbats.h
