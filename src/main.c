@@ -7,6 +7,7 @@
 #include "crate.h"
 #include "door.h"
 #include "robot.h"
+#include "sfx.h"
 #include "tiny_font.h"
 #include "window_text.h"
 #include "typewriter.h"
@@ -285,6 +286,7 @@ void main(void) {
 
     BGP_REG = 0xE4;
     OBP0_REG = 0xE4;
+    sfx_init();
 
     /*
      * Separate BG and Window tilemaps.
@@ -387,6 +389,10 @@ void main(void) {
             if (anim_timer >= 10u) {
                 anim_timer = 0u;
                 robot_frame ^= 1u;   /* toggles 0 <-> 1 */
+
+                if (robot_frame == 1u) {
+                    sfx_robot_step();
+                }
             }
         } else {
             anim_timer = 0u;

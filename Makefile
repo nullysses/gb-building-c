@@ -24,7 +24,8 @@ C_SOURCES := \
 	src/robot.c \
 	src/tiny_font.c \
 	src/window_text.c \
-	src/typewriter.c
+	src/typewriter.c \
+	src/sfx.c
 
 .PHONY: all assets clean rebuild run check
 

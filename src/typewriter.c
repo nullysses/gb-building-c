@@ -1,6 +1,7 @@
 #include <gb/gb.h>
 #include <stdint.h>
 
+#include "sfx.h"
 #include "tiny_font.h"
 #include "typewriter.h"
 
@@ -86,6 +87,8 @@ static void typewriter_put_char(typewriter_t *tw, char c) {
         1u,
         &tile
     );
+
+    sfx_text_tick();
 
     tw->cursor_x++;
 
