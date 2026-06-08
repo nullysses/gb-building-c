@@ -142,10 +142,7 @@ static const hotspot_t hotspots[] = {
     { ROOM_WEST, 12u, 40u,   "SEALED CRATE",  "???" },
     { ROOM_WEST, 70u, 96u,   "WALL SENSOR",   "IT WATCHES YOU" },
     { ROOM_WEST, 120u, 152u, "SUPPLY CRATE",  "EMPTY. TOO CLEAN" },
-    { ROOM_EAST, 70u, 96u,   "WALL SENSOR",   "IT WATCHES YOU" },
-    { ROOM_EAST, EAST_DOOR_HOTSPOT_X_MIN, EAST_DOOR_HOTSPOT_X_MAX, "DOOR LOCKED", "NO PROMPT FOUND" },
-    { ROOM_NORTH, NORTH_DOOR_HOTSPOT_X_MIN, NORTH_DOOR_HOTSPOT_X_MAX, "DOOR LOCKED", "NO PROMPT FOUND" },
-    { ROOM_NORTH, NORTH_LOCKED_DOOR_HOTSPOT_X_MIN, NORTH_LOCKED_DOOR_HOTSPOT_X_MAX, "DOOR LOCKED", "NO PROMPT FOUND" }
+    { ROOM_EAST, 70u, 96u,   "WALL SENSOR",   "IT WATCHES YOU" }
 };
 
 static const door_t doors[] = {
@@ -185,10 +182,6 @@ static const door_t doors[] = {
 };
 
 static uint8_t room_map[ROOM_W * ROOM_H];
-
-static const uint8_t walk_seq[2] = {
-    0u, 1u
-};
 
 static void run_opening(uint8_t font_base) {
     typewriter_t tw;
