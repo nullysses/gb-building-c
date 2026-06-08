@@ -64,7 +64,7 @@ src/robot.c src/robot.h: assets/robot.png
 >$(PNG2ASSET) assets/robot.png \
 >	-spr8x16 \
 >	-sw 16 \
->	-sh 16 \
+>	-sh 32 \
 >	-keep_palette_order \
 >	-o src/robot.c
 

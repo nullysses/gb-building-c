@@ -25,3 +25,5 @@ src/robot.c
 src/robot.h
 src/dingbats.c
 src/dingbats.h
+src/door.c
+src/door.h

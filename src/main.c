@@ -121,8 +121,8 @@ static const hotspot_t hotspots[] = {
 
 static uint8_t room_map[ROOM_W * ROOM_H];
 
-static const uint8_t walk_seq[4] = {
-    1u, 2u, 3u, 2u
+static const uint8_t walk_seq[2] = {
+    0u, 1u
 };
 
 static void run_opening(uint8_t font_base) {
@@ -384,14 +384,12 @@ void main(void) {
         if (moving) {
             anim_timer++;
 
-            if (anim_timer >= 8u) {
+            if (anim_timer >= 10u) {
                 anim_timer = 0u;
-                walk_index = (uint8_t)((walk_index + 1u) & 3u);
-                robot_frame = walk_seq[walk_index];
+                robot_frame ^= 1u;   /* toggles 0 <-> 1 */
             }
         } else {
             anim_timer = 0u;
-            walk_index = 0u;
             robot_frame = 0u;
         }
 
