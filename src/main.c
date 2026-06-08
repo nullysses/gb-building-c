@@ -53,8 +53,13 @@
 
 #define DOOR_W 3u
 #define DOOR_H 4u
-#define DOOR_X 16u
+#define EAST_DOOR_X 16u
+#define NORTH_DOOR_X (ROOM_W - EAST_DOOR_X - DOOR_W)
 #define DOOR_Y 10u
+#define MAX_DOORS_PER_ROOM 3u
+#define DOOR_INDEX_NONE 0xFFu
+#define DOOR_ACTION_OPEN 0u
+#define DOOR_ACTION_LOCKED 1u
 
 #define ROBOT_Y 120u
 #define ROBOT_MIN_X 8u
@@ -63,11 +68,20 @@
 
 #define ROOM_WEST 0u
 #define ROOM_EAST 1u
+#define ROOM_NORTH 2u
 
 #define ROBOT_FACE_RIGHT 0u
 #define ROBOT_FACE_LEFT  1u
 
+#define EAST_DOOR_HOTSPOT_X_MIN 128u
+#define EAST_DOOR_HOTSPOT_X_MAX 160u
+#define NORTH_DOOR_HOTSPOT_X_MIN 8u
+#define NORTH_DOOR_HOTSPOT_X_MAX 40u
+#define NORTH_LOCKED_DOOR_HOTSPOT_X_MIN 128u
+#define NORTH_LOCKED_DOOR_HOTSPOT_X_MAX 160u
+
 #define HOTSPOT_COUNT ((uint8_t)(sizeof(hotspots) / sizeof(hotspots[0])))
+#define DOOR_COUNT ((uint8_t)(sizeof(doors) / sizeof(doors[0])))
 
 typedef struct hotspot_t {
     uint8_t room;
@@ -76,6 +90,18 @@ typedef struct hotspot_t {
     const char *line_0;
     const char *line_1;
 } hotspot_t;
+
+typedef struct door_t {
+    uint8_t room;
+    uint8_t index;
+    uint8_t tile_x;
+    uint8_t tile_y;
+    uint8_t x_min;
+    uint8_t x_max;
+    uint8_t action;
+    uint8_t dest_room;
+    uint8_t dest_x;
+} door_t;
 
 static const char opening_0[] =
     "@ CHECKPOINT\n"
@@ -117,7 +143,45 @@ static const hotspot_t hotspots[] = {
     { ROOM_WEST, 70u, 96u,   "WALL SENSOR",   "IT WATCHES YOU" },
     { ROOM_WEST, 120u, 152u, "SUPPLY CRATE",  "EMPTY. TOO CLEAN" },
     { ROOM_EAST, 70u, 96u,   "WALL SENSOR",   "IT WATCHES YOU" },
-    { ROOM_EAST, 128u, 160u, "DOOR LOCKED",   "NO PROMPT FOUND" }
+    { ROOM_EAST, EAST_DOOR_HOTSPOT_X_MIN, EAST_DOOR_HOTSPOT_X_MAX, "DOOR LOCKED", "NO PROMPT FOUND" },
+    { ROOM_NORTH, NORTH_DOOR_HOTSPOT_X_MIN, NORTH_DOOR_HOTSPOT_X_MAX, "DOOR LOCKED", "NO PROMPT FOUND" },
+    { ROOM_NORTH, NORTH_LOCKED_DOOR_HOTSPOT_X_MIN, NORTH_LOCKED_DOOR_HOTSPOT_X_MAX, "DOOR LOCKED", "NO PROMPT FOUND" }
+};
+
+static const door_t doors[] = {
+    {
+        ROOM_EAST,
+        0u,
+        EAST_DOOR_X,
+        DOOR_Y,
+        EAST_DOOR_HOTSPOT_X_MIN,
+        EAST_DOOR_HOTSPOT_X_MAX,
+        DOOR_ACTION_OPEN,
+        ROOM_NORTH,
+        NORTH_DOOR_HOTSPOT_X_MAX
+    },
+    {
+        ROOM_NORTH,
+        0u,
+        NORTH_DOOR_X,
+        DOOR_Y,
+        NORTH_DOOR_HOTSPOT_X_MIN,
+        NORTH_DOOR_HOTSPOT_X_MAX,
+        DOOR_ACTION_OPEN,
+        ROOM_EAST,
+        EAST_DOOR_HOTSPOT_X_MIN
+    },
+    {
+        ROOM_NORTH,
+        1u,
+        EAST_DOOR_X,
+        DOOR_Y,
+        NORTH_LOCKED_DOOR_HOTSPOT_X_MIN,
+        NORTH_LOCKED_DOOR_HOTSPOT_X_MAX,
+        DOOR_ACTION_LOCKED,
+        ROOM_NORTH,
+        NORTH_LOCKED_DOOR_HOTSPOT_X_MIN
+    }
 };
 
 static uint8_t room_map[ROOM_W * ROOM_H];
@@ -213,6 +277,7 @@ static void room_put_door(uint8_t x, uint8_t y) {
 static void build_room_map(uint8_t room) {
     uint8_t x;
     uint8_t y;
+    uint8_t i;
 
     /* Brick background */
     for (y = 0u; y < ROOM_H; ++y) {
@@ -231,8 +296,12 @@ static void build_room_map(uint8_t room) {
     if (room == ROOM_WEST) {
         room_put_crate(2u, 12u);
         room_put_crate(16u, 12u);
-    } else {
-        room_put_door(DOOR_X, DOOR_Y);
+    }
+
+    for (i = 0u; i < DOOR_COUNT; ++i) {
+        if (doors[i].room == room && doors[i].index < MAX_DOORS_PER_ROOM) {
+            room_put_door(doors[i].tile_x, doors[i].tile_y);
+        }
     }
 }
 
@@ -241,14 +310,40 @@ static void draw_room(uint8_t room) {
     set_bkg_tiles(0, 0, ROOM_W, ROOM_H, room_map);
 }
 
-static void show_status(uint8_t room) {
+static uint8_t find_door(uint8_t room, uint8_t x) {
+    uint8_t i;
+
+    for (i = 0u; i < DOOR_COUNT; ++i) {
+        if (
+            doors[i].room == room &&
+            x >= doors[i].x_min &&
+            x <= doors[i].x_max
+        ) {
+            return i;
+        }
+    }
+
+    return DOOR_INDEX_NONE;
+}
+
+static void show_status(uint8_t room, uint8_t x) {
+    uint8_t door_index;
+
     if (room == ROOM_EAST) {
         window_draw_row(FONT_TILE_BASE, 0, "BUILDING C EAST");
+    } else if (room == ROOM_NORTH) {
+        window_draw_row(FONT_TILE_BASE, 0, "BUILDING C NORTH");
     } else {
         window_draw_row(FONT_TILE_BASE, 0, "BUILDING C WEST");
     }
 
-    window_draw_row(FONT_TILE_BASE, 1, "+:MOVE a:LOOK");
+    door_index = find_door(room, x);
+
+    if (door_index != DOOR_INDEX_NONE) {
+        window_draw_row(FONT_TILE_BASE, 1, "+:MOVE a:OPEN");
+    } else {
+        window_draw_row(FONT_TILE_BASE, 1, "+:MOVE a:LOOK");
+    }
 }
 
 static void inspect_at(uint8_t room, uint8_t x) {
@@ -283,6 +378,7 @@ void main(void) {
     uint8_t joy;
     uint8_t prev_joy = 0u;
     uint8_t moving;
+    uint8_t door_index;
 
     BGP_REG = 0xE4;
     OBP0_REG = 0xE4;
@@ -322,7 +418,7 @@ void main(void) {
     /* Bottom dialogue/status window */
     move_win(7, 128);
     window_clear(FONT_TILE_BASE);
-    show_status(room);
+    show_status(room, robot_x);
 
     SHOW_BKG;
     SHOW_WIN;
@@ -349,7 +445,7 @@ void main(void) {
             }
 
             if (moving) {
-                show_status(room);
+                show_status(room, robot_x);
             }
         }
 
@@ -367,12 +463,26 @@ void main(void) {
             }
 
             if (moving) {
-                show_status(room);
+                show_status(room, robot_x);
             }
         }
 
         if ((joy & J_A) && !(prev_joy & J_A)) {
-            inspect_at(room, robot_x);
+            door_index = find_door(room, robot_x);
+
+            if (
+                door_index != DOOR_INDEX_NONE &&
+                doors[door_index].action == DOOR_ACTION_OPEN
+            ) {
+                room = doors[door_index].dest_room;
+                robot_x = doors[door_index].dest_x;
+                draw_room(room);
+                show_status(room, robot_x);
+            } else if (door_index != DOOR_INDEX_NONE) {
+                window_draw_row(FONT_TILE_BASE, 1, "* LOCKED!");
+            } else {
+                inspect_at(room, robot_x);
+            }
         }
 
         if ((joy & J_START) && !(prev_joy & J_START)) {
@@ -380,7 +490,7 @@ void main(void) {
             robot_x = 80u;
             robot_facing = ROBOT_FACE_RIGHT;
             draw_room(room);
-            show_status(room);
+            show_status(room, robot_x);
         }
 
         if (moving) {
