@@ -4,6 +4,13 @@ GBDKDIR ?= $(HOME)/.local/opt/gbdk/
 LCC := $(GBDKDIR)bin/lcc
 PNG2ASSET := $(GBDKDIR)bin/png2asset
 
+HUGE_DIR := third_party/hUGEDriver
+HUGE_INC := $(HUGE_DIR)/include
+HUGE_LIB := $(HUGE_DIR)/lib/hUGEDriver.lib
+
+CFLAGS += -I$(HUGE_INC)
+LIBS += $(HUGE_LIB)
+
 EMU ?= sameboy
 ROM := build/demo001.gb
 DIST_ROM := dist/building_c.gb
@@ -13,6 +20,7 @@ ASSETS := \
 	src/floor.c \
 	src/crate.c \
 	src/door.c \
+	src/exit_sign.c \
 	src/robot.c
 
 C_SOURCES := \
@@ -21,11 +29,14 @@ C_SOURCES := \
 	src/floor.c \
 	src/crate.c \
 	src/door.c \
+	src/exit_sign.c \
 	src/robot.c \
 	src/tiny_font.c \
 	src/window_text.c \
 	src/typewriter.c \
-	src/sfx.c
+	src/sfx.c \
+	src/audio/music.c \
+	src/generated/music/bg_building.c
 
 .PHONY: all assets clean rebuild run check
 
@@ -61,6 +72,16 @@ src/door.c src/door.h: assets/door.png
 >	-noflip \
 >	-o src/door.c
 
+src/exit_sign.c src/exit_sign.h: assets/exit-sign.png
+>$(PNG2ASSET) assets/exit-sign.png \
+>	-map \
+>	-sw 24 \
+>	-sh 8 \
+>	-keep_palette_order \
+>	-keep_duplicate_tiles \
+>	-noflip \
+>	-o src/exit_sign.c
+
 src/robot.c src/robot.h: assets/robot.png
 >$(PNG2ASSET) assets/robot.png \
 >	-spr8x16 \
@@ -69,9 +90,9 @@ src/robot.c src/robot.h: assets/robot.png
 >	-keep_palette_order \
 >	-o src/robot.c
 
-$(ROM): $(C_SOURCES)
+$(ROM): $(C_SOURCES) $(HUGE_LIB)
 >mkdir -p build
->$(LCC) -o $(ROM) $(C_SOURCES)
+>$(LCC) $(CFLAGS) -o $(ROM) $(C_SOURCES) $(LIBS)
 
 run: $(ROM)
 >$(EMU) $(ROM)
@@ -86,10 +107,14 @@ check:
 >@echo "GBDKDIR=$(GBDKDIR)"
 >@test -x "$(LCC)" || (echo "Missing lcc: $(LCC)" && exit 1)
 >@test -x "$(PNG2ASSET)" || (echo "Missing png2asset: $(PNG2ASSET)" && exit 1)
+>@test -f "$(HUGE_INC)/hUGEDriver.h" || (echo "Missing hUGEDriver.h: $(HUGE_INC)/hUGEDriver.h" && exit 1)
+>@test -f "$(HUGE_LIB)" || (echo "Missing hUGEDriver.lib: $(HUGE_LIB)" && exit 1)
+>@test -f src/generated/music/bg_building.c || (echo "Missing exported hUGE song: src/generated/music/bg_building.c" && exit 1)
 >@test -f assets/brickwall.png || (echo "Missing assets/brickwall.png" && exit 1)
 >@test -f assets/floor.png || (echo "Missing assets/floor.png" && exit 1)
 >@test -f assets/crate.png || (echo "Missing assets/crate.png" && exit 1)
 >@test -f assets/door.png || (echo "Missing assets/door.png" && exit 1)
+>@test -f assets/exit-sign.png || (echo "Missing assets/exit-sign.png" && exit 1)
 >@test -f assets/robot.png || (echo "Missing assets/robot.png" && exit 1)
 >@echo "Toolchain and assets look present."
 
@@ -100,4 +125,5 @@ clean:
 >rm -f src/floor.c src/floor.h
 >rm -f src/crate.c src/crate.h
 >rm -f src/door.c src/door.h
+>rm -f src/exit_sign.c src/exit_sign.h
 >rm -f src/robot.c src/robot.h

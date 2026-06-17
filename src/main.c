@@ -6,11 +6,13 @@
 #include "floor.h"
 #include "crate.h"
 #include "door.h"
+#include "exit_sign.h"
 #include "robot.h"
 #include "sfx.h"
 #include "tiny_font.h"
 #include "window_text.h"
 #include "typewriter.h"
+#include "audio/music.h"
 
 #define ROOM_W 20u
 #define ROOM_H 16u
@@ -25,8 +27,9 @@
 #define FLOOR_TILE_BASE (BRICK_TILE_BASE + brickwall_TILE_COUNT)
 #define CRATE_TILE_BASE (FLOOR_TILE_BASE + floor_TILE_COUNT)
 #define DOOR_TILE_BASE  (CRATE_TILE_BASE + crate_TILE_COUNT)
+#define EXIT_SIGN_TILE_BASE (DOOR_TILE_BASE + door_TILE_COUNT)
 
-#define FONT_TILE_BASE  (DOOR_TILE_BASE + door_TILE_COUNT)
+#define FONT_TILE_BASE  (EXIT_SIGN_TILE_BASE + exit_sign_TILE_COUNT)
 #define ROBOT_TILE_BASE ((FONT_TILE_BASE + TINY_FONT_TILE_COUNT + 1u) & 0xFEu)
 
 /*
@@ -61,6 +64,10 @@
 #define DOOR_ACTION_OPEN 0u
 #define DOOR_ACTION_LOCKED 1u
 
+#define EXIT_SIGN_W 3u
+#define EXIT_SIGN_X 16u
+#define EXIT_SIGN_Y 8u
+
 #define ROBOT_Y 120u
 #define ROBOT_MIN_X 8u
 #define ROBOT_MAX_X 160u
@@ -72,6 +79,11 @@
 
 #define ROBOT_FACE_RIGHT 0u
 #define ROBOT_FACE_LEFT  1u
+
+#define STATUS_PROMPT_LOOK 0u
+#define STATUS_PROMPT_OPEN 1u
+#define STATUS_PROMPT_LOCKED 2u
+#define STATUS_PROMPT_NONE 0xFFu
 
 #define EAST_DOOR_HOTSPOT_X_MIN 128u
 #define EAST_DOOR_HOTSPOT_X_MAX 160u
@@ -267,6 +279,18 @@ static void room_put_door(uint8_t x, uint8_t y) {
     }
 }
 
+static void room_put_exit_sign(uint8_t x, uint8_t y) {
+    uint8_t sign_x;
+
+    for (sign_x = 0u; sign_x < EXIT_SIGN_W; ++sign_x) {
+        room_set_tile(
+            x + sign_x,
+            y,
+            EXIT_SIGN_TILE_BASE + exit_sign_map[sign_x]
+        );
+    }
+}
+
 static void build_room_map(uint8_t room) {
     uint8_t x;
     uint8_t y;
@@ -296,6 +320,10 @@ static void build_room_map(uint8_t room) {
             room_put_door(doors[i].tile_x, doors[i].tile_y);
         }
     }
+
+    if (room == ROOM_NORTH) {
+        room_put_exit_sign(EXIT_SIGN_X, EXIT_SIGN_Y);
+    }
 }
 
 static void draw_room(uint8_t room) {
@@ -319,9 +347,7 @@ static uint8_t find_door(uint8_t room, uint8_t x) {
     return DOOR_INDEX_NONE;
 }
 
-static void show_status(uint8_t room, uint8_t x) {
-    uint8_t door_index;
-
+static void draw_status(uint8_t room, uint8_t prompt) {
     if (room == ROOM_EAST) {
         window_draw_row(FONT_TILE_BASE, 0, "BUILDING C EAST");
     } else if (room == ROOM_NORTH) {
@@ -330,13 +356,46 @@ static void show_status(uint8_t room, uint8_t x) {
         window_draw_row(FONT_TILE_BASE, 0, "BUILDING C WEST");
     }
 
-    door_index = find_door(room, x);
-
-    if (door_index != DOOR_INDEX_NONE) {
+    if (prompt == STATUS_PROMPT_OPEN) {
         window_draw_row(FONT_TILE_BASE, 1, "+:MOVE a:OPEN");
+    } else if (prompt == STATUS_PROMPT_LOCKED) {
+        window_draw_row(FONT_TILE_BASE, 1, "* LOCKED!");
     } else {
         window_draw_row(FONT_TILE_BASE, 1, "+:MOVE a:LOOK");
     }
+}
+
+static uint8_t get_status_prompt(uint8_t room, uint8_t x) {
+    if (find_door(room, x) != DOOR_INDEX_NONE) {
+        return STATUS_PROMPT_OPEN;
+    }
+
+    return STATUS_PROMPT_LOOK;
+}
+
+static void update_status_if_changed(
+    uint8_t room,
+    uint8_t x,
+    uint8_t *shown_room,
+    uint8_t *shown_prompt
+) {
+    uint8_t prompt = get_status_prompt(room, x);
+
+    if (*shown_room != room || *shown_prompt != prompt) {
+        draw_status(room, prompt);
+        *shown_room = room;
+        *shown_prompt = prompt;
+    }
+}
+
+static void show_locked_status(
+    uint8_t room,
+    uint8_t *shown_room,
+    uint8_t *shown_prompt
+) {
+    draw_status(room, STATUS_PROMPT_LOCKED);
+    *shown_room = room;
+    *shown_prompt = STATUS_PROMPT_LOCKED;
 }
 
 static void inspect_at(uint8_t room, uint8_t x) {
@@ -361,17 +420,19 @@ static void inspect_at(uint8_t room, uint8_t x) {
 }
 
 void main(void) {
+    music_play_building();
     uint8_t robot_x = 80u;
     uint8_t room = ROOM_WEST;
     uint8_t robot_facing = ROBOT_FACE_RIGHT;
     uint8_t robot_frame = 0u;
     uint8_t anim_timer = 0u;
-    uint8_t walk_index = 0u;
 
     uint8_t joy;
     uint8_t prev_joy = 0u;
     uint8_t moving;
     uint8_t door_index;
+    uint8_t shown_room = 0xFFu;
+    uint8_t shown_prompt = STATUS_PROMPT_NONE;
 
     BGP_REG = 0xE4;
     OBP0_REG = 0xE4;
@@ -390,6 +451,7 @@ void main(void) {
     set_bkg_data(FLOOR_TILE_BASE, floor_TILE_COUNT, floor_tiles);
     set_bkg_data(CRATE_TILE_BASE, crate_TILE_COUNT, crate_tiles);
     set_bkg_data(DOOR_TILE_BASE, door_TILE_COUNT, door_tiles);
+    set_bkg_data(EXIT_SIGN_TILE_BASE, exit_sign_TILE_COUNT, exit_sign_tiles);
 
     /* Window font tiles share BG/Window tile pattern memory */
     set_bkg_data(FONT_TILE_BASE, TINY_FONT_TILE_COUNT, tiny_font_tiles);
@@ -411,7 +473,7 @@ void main(void) {
     /* Bottom dialogue/status window */
     move_win(7, 128);
     window_clear(FONT_TILE_BASE);
-    show_status(room, robot_x);
+    update_status_if_changed(room, robot_x, &shown_room, &shown_prompt);
 
     SHOW_BKG;
     SHOW_WIN;
@@ -438,7 +500,7 @@ void main(void) {
             }
 
             if (moving) {
-                show_status(room, robot_x);
+                update_status_if_changed(room, robot_x, &shown_room, &shown_prompt);
             }
         }
 
@@ -456,7 +518,7 @@ void main(void) {
             }
 
             if (moving) {
-                show_status(room, robot_x);
+                update_status_if_changed(room, robot_x, &shown_room, &shown_prompt);
             }
         }
 
@@ -470,11 +532,12 @@ void main(void) {
                 room = doors[door_index].dest_room;
                 robot_x = doors[door_index].dest_x;
                 draw_room(room);
-                show_status(room, robot_x);
+                update_status_if_changed(room, robot_x, &shown_room, &shown_prompt);
             } else if (door_index != DOOR_INDEX_NONE) {
-                window_draw_row(FONT_TILE_BASE, 1, "* LOCKED!");
+                show_locked_status(room, &shown_room, &shown_prompt);
             } else {
                 inspect_at(room, robot_x);
+                shown_prompt = STATUS_PROMPT_NONE;
             }
         }
 
@@ -483,7 +546,7 @@ void main(void) {
             robot_x = 80u;
             robot_facing = ROBOT_FACE_RIGHT;
             draw_room(room);
-            show_status(room, robot_x);
+            update_status_if_changed(room, robot_x, &shown_room, &shown_prompt);
         }
 
         if (moving) {

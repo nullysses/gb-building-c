@@ -1,0 +1,56 @@
+name: Package driver distribution
+
+on:
+  - push
+  - pull_request
+  - workflow_dispatch
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install build dependencies
+        shell: bash
+        run: |
+          sudo apt -qq update
+          sudo apt install -yq bison
+
+          wget 'https://github.com/gbdev/rgbds/releases/download/v0.6.1/rgbds-0.6.1.tar.gz' -O- | tar xz rgbds/{include,src,Makefile}
+          pushd rgbds
+          make -j4 rgbasm rgblink rgbfix Q=
+          popd
+
+          wget https://github.com/gbdk-2020/gbdk-2020/releases/download/4.1.1/gbdk-linux64.tar.gz -O- | tar xz
+
+      - name: Check out hUGEDriver
+        uses: actions/checkout@v2
+        with:
+          path: hUGEDriver
+
+      - name: Build distribution
+        shell: bash
+        run: |
+          export PATH=$PATH:`realpath gbdk/bin`
+          export PATH=$PATH:`realpath rgbds`
+
+          pushd hUGEDriver
+          rgbasm -DGBDK -ohUGEDriver.obj hUGEDriver.asm
+          python ./tools/rgb2sdas.py -o hUGEDriver.o hUGEDriver.obj
+          sdar -ru hUGEDriver.lib hUGEDriver.o
+          popd
+
+          mkdir packaging
+          mkdir packaging/rgbds
+          mkdir packaging/gbdk
+
+          cp hUGEDriver/hUGEDriver.asm packaging/rgbds/
+          cp -R hUGEDriver/include/ packaging/
+          cp hUGEDriver/hUGEDriver.lib packaging/gbdk/
+
+          rm packaging/include/hardware.inc
+
+      - name: Store build
+        uses: actions/upload-artifact@v2
+        with:
+          name: hUGEDriver
+          path: packaging/

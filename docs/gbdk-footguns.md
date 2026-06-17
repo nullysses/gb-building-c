@@ -471,7 +471,40 @@ Generated `png2asset` files should be reproducible from source PNGs.
 
 ---
 
-## 16. Good local loop
+## 16. Do not repair PNGs or generated assets by hand
+
+If an asset renders wrong, do not patch bytes in the PNG and do not hand-edit
+the generated `.c` / `.h` output.
+
+Correct loop:
+
+```text
+1. Fix or replace the source asset with the art tool.
+2. Regenerate with the Makefile `png2asset` rule.
+3. Check the generated header dimensions and tile count.
+4. Adjust game placement code only after the generated metadata is correct.
+```
+
+For small composite background objects, pass explicit slice dimensions when the
+intended object size matters:
+
+```bash
+png2asset assets/exit-sign.png \
+  -map \
+  -sw 24 \
+  -sh 8 \
+  -keep_palette_order \
+  -keep_duplicate_tiles \
+  -noflip \
+  -o src/exit_sign.c
+```
+
+Avoid `-transposed` unless the asset itself is intentionally authored for
+transposed map order. A horizontal strip should stay horizontal.
+
+---
+
+## 17. Good local loop
 
 ```bash
 make clean
