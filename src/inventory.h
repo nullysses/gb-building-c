@@ -30,16 +30,6 @@ typedef struct inventory_t {
     uint8_t view;
 } inventory_t;
 
-typedef struct world_state_t {
-    uint8_t room;
-    uint8_t robot_x;
-    uint8_t north_east_crate_looted;
-    uint8_t north_locked_door_unlocked;
-    uint8_t north_room;
-    uint8_t north_locked_door_x_min;
-    uint8_t north_locked_door_x_max;
-} world_state_t;
-
 typedef struct item_use_result_t {
     const char *line_0;
     const char *line_1;
@@ -57,10 +47,5 @@ void inventory_clamp_selection(inventory_t *inventory);
 void inventory_select_prev(inventory_t *inventory);
 void inventory_select_next(inventory_t *inventory);
 const inventory_item_t *inventory_get_item(inventory_item_id_t item);
-item_use_result_t inventory_use_item(
-    inventory_t *inventory,
-    inventory_item_id_t item,
-    world_state_t *world
-);
 
 #endif

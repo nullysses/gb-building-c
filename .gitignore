@@ -3,6 +3,7 @@
 
 # Local build output
 build/
+.sameboy-build/
 
 # Intermediate compiler/toolchain files
 *.map
