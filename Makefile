@@ -25,6 +25,7 @@ ASSETS := \
 
 C_SOURCES := \
 	src/main.c \
+	src/inventory.c \
 	src/brickwall.c \
 	src/floor.c \
 	src/crate.c \
