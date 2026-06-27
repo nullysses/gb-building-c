@@ -74,6 +74,8 @@
 #define ROBOT_MIN_X 8u
 #define ROBOT_MAX_X 160u
 #define STATUS_WIN_Y 128u
+#define LOCATION_BANNER_ROW 0u
+#define LOCATION_BANNER_FRAMES 180u
 #define INVENTORY_WIN_Y 0u
 #define INVENTORY_HIDDEN_WIN_Y 144u
 #define FULLSCREEN_WIN_H 18u
@@ -146,6 +148,7 @@ typedef struct level_1_runtime_t {
     uint8_t shown_prompt;
     uint8_t inventory_open;
     uint8_t paused;
+    uint8_t location_banner_timer;
 } level_1_runtime_t;
 
 static const hotspot_t hotspots[] = {
@@ -273,6 +276,69 @@ static void draw_room(uint8_t room) {
     set_bkg_tiles(0, 0, ROOM_W, ROOM_H, room_map);
 }
 
+static const char *location_name(uint8_t room) {
+    if (room == ROOM_EAST) {
+        return "BUILDING C EAST";
+    } else if (room == ROOM_NORTH) {
+        return "BUILDING C NORTH";
+    } else if (room == ROOM_NORTH_WEST) {
+        return "BUILDING C N/WEST";
+    } else if (room == ROOM_NORTH_EAST) {
+        return "BUILDING C N/EAST";
+    }
+
+    return "BUILDING C WEST";
+}
+
+static void draw_bkg_text_row(uint8_t y, const char *text) {
+    uint8_t row[ROOM_W];
+    uint8_t i;
+    uint8_t ended = 0u;
+
+    for (i = 0u; i < ROOM_W; ++i) {
+        char c;
+
+        if (ended) {
+            c = ' ';
+        } else {
+            c = text[i];
+
+            if (c == '\0') {
+                c = ' ';
+                ended = 1u;
+            }
+        }
+
+        row[i] = tiny_font_tile_for_char(FONT_TILE_BASE, c);
+    }
+
+    set_bkg_tiles(0u, y, ROOM_W, 1u, row);
+}
+
+static void restore_location_banner_row(void) {
+    set_bkg_tiles(0u, LOCATION_BANNER_ROW, ROOM_W, 1u, room_map);
+}
+
+static void show_location_banner(
+    const world_state_t *world,
+    level_1_runtime_t *runtime
+) {
+    draw_bkg_text_row(LOCATION_BANNER_ROW, location_name(world->room));
+    runtime->location_banner_timer = LOCATION_BANNER_FRAMES;
+}
+
+static void update_location_banner(level_1_runtime_t *runtime) {
+    if (runtime->location_banner_timer == 0u) {
+        return;
+    }
+
+    runtime->location_banner_timer--;
+
+    if (runtime->location_banner_timer == 0u) {
+        restore_location_banner_row();
+    }
+}
+
 static void enter_room(uint8_t *room, uint8_t next_room, uint8_t *robot_x, uint8_t next_x) {
     *room = next_room;
     *robot_x = next_x;
@@ -321,19 +387,8 @@ static uint8_t door_effective_action(uint8_t door_index, const world_state_t *wo
     return doors[door_index].action;
 }
 
-static void draw_status(uint8_t room, uint8_t prompt) {
-    if (room == ROOM_EAST) {
-        window_draw_row(FONT_TILE_BASE, 0, "BUILDING C EAST");
-    } else if (room == ROOM_NORTH) {
-        window_draw_row(FONT_TILE_BASE, 0, "BUILDING C NORTH");
-    } else if (room == ROOM_NORTH_WEST) {
-        window_draw_row(FONT_TILE_BASE, 0, "BUILDING C N/WEST");
-    } else if (room == ROOM_NORTH_EAST) {
-        window_draw_row(FONT_TILE_BASE, 0, "BUILDING C N/EAST");
-    } else {
-        window_draw_row(FONT_TILE_BASE, 0, "BUILDING C WEST");
-    }
-
+static void draw_status(uint8_t prompt) {
+    window_draw_row(FONT_TILE_BASE, 0, "");
     if (prompt == STATUS_PROMPT_OPEN) {
         window_draw_row(FONT_TILE_BASE, 1, "+:MOVE a:OPEN");
     } else if (prompt == STATUS_PROMPT_LOCKED) {
@@ -365,7 +420,7 @@ static void update_status_if_changed(
     uint8_t prompt = get_status_prompt(world);
 
     if (*shown_room != world->room || *shown_prompt != prompt) {
-        draw_status(world->room, prompt);
+        draw_status(prompt);
         *shown_room = world->room;
         *shown_prompt = prompt;
     }
@@ -376,7 +431,7 @@ static void show_locked_status(
     uint8_t *shown_room,
     uint8_t *shown_prompt
 ) {
-    draw_status(room, STATUS_PROMPT_LOCKED);
+    draw_status(STATUS_PROMPT_LOCKED);
     *shown_room = room;
     *shown_prompt = STATUS_PROMPT_LOCKED;
 }
@@ -756,6 +811,7 @@ static void level_1_init_runtime(level_1_runtime_t *runtime) {
     runtime->shown_prompt = STATUS_PROMPT_NONE;
     runtime->inventory_open = 0u;
     runtime->paused = 0u;
+    runtime->location_banner_timer = 0u;
 }
 
 static void level_1_load_assets(void) {
@@ -764,6 +820,7 @@ static void level_1_load_assets(void) {
     set_bkg_data(CRATE_TILE_BASE, crate_TILE_COUNT, crate_tiles);
     set_bkg_data(DOOR_TILE_BASE, door_TILE_COUNT, door_tiles);
     set_bkg_data(EXIT_SIGN_TILE_BASE, exit_sign_TILE_COUNT, exit_sign_tiles);
+    set_bkg_data(FONT_TILE_BASE, TINY_FONT_TILE_COUNT, tiny_font_tiles);
 
     SPRITES_8x16;
     set_sprite_data(ROBOT_TILE_BASE, robot_TILE_COUNT, robot_tiles);
@@ -798,6 +855,7 @@ static void level_1_draw_initial_state(
     level_1_runtime_t *runtime
 ) {
     draw_room(world->room);
+    show_location_banner(world, runtime);
 
     move_win(7, STATUS_WIN_Y);
     window_clear(FONT_TILE_BASE);
@@ -827,6 +885,8 @@ static uint8_t level_1_update(
     joy = joypad();
     moving = 0u;
     inventory_toggled = 0u;
+
+    update_location_banner(runtime);
 
     if (
         !runtime->inventory_open &&
@@ -887,14 +947,17 @@ static uint8_t level_1_update(
             runtime->robot_facing = ROBOT_FACE_LEFT;
         } else if (world->room == ROOM_EAST) {
             enter_room(&world->room, ROOM_WEST, &world->robot_x, ROBOT_MAX_X);
+            show_location_banner(world, runtime);
             moving = 1u;
             runtime->robot_facing = ROBOT_FACE_LEFT;
         } else if (world->room == ROOM_NORTH) {
             enter_room(&world->room, ROOM_NORTH_WEST, &world->robot_x, ROBOT_MAX_X);
+            show_location_banner(world, runtime);
             moving = 1u;
             runtime->robot_facing = ROBOT_FACE_LEFT;
         } else if (world->room == ROOM_NORTH_EAST) {
             enter_room(&world->room, ROOM_NORTH, &world->robot_x, ROBOT_MAX_X);
+            show_location_banner(world, runtime);
             moving = 1u;
             runtime->robot_facing = ROBOT_FACE_LEFT;
         }
@@ -915,14 +978,17 @@ static uint8_t level_1_update(
             runtime->robot_facing = ROBOT_FACE_RIGHT;
         } else if (world->room == ROOM_WEST) {
             enter_room(&world->room, ROOM_EAST, &world->robot_x, ROBOT_MIN_X);
+            show_location_banner(world, runtime);
             moving = 1u;
             runtime->robot_facing = ROBOT_FACE_RIGHT;
         } else if (world->room == ROOM_NORTH) {
             enter_room(&world->room, ROOM_NORTH_EAST, &world->robot_x, ROBOT_MIN_X);
+            show_location_banner(world, runtime);
             moving = 1u;
             runtime->robot_facing = ROBOT_FACE_RIGHT;
         } else if (world->room == ROOM_NORTH_WEST) {
             enter_room(&world->room, ROOM_NORTH, &world->robot_x, ROBOT_MIN_X);
+            show_location_banner(world, runtime);
             moving = 1u;
             runtime->robot_facing = ROBOT_FACE_RIGHT;
         }
@@ -951,6 +1017,7 @@ static uint8_t level_1_update(
             world->room = doors[door_index].dest_room;
             world->robot_x = doors[door_index].dest_x;
             draw_room(world->room);
+            show_location_banner(world, runtime);
             update_status_if_changed(
                 world,
                 &runtime->shown_room,
