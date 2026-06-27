@@ -72,10 +72,17 @@
 #define ROBOT_MIN_X 8u
 #define ROBOT_MAX_X 160u
 #define OPENING_PAGE_COUNT 3u
+#define STATUS_WIN_Y 128u
+#define INVENTORY_WIN_Y 0u
+#define FULLSCREEN_WIN_H 18u
 
 #define ROOM_WEST 0u
 #define ROOM_EAST 1u
 #define ROOM_NORTH 2u
+#define ROOM_NORTH_WEST 3u
+#define ROOM_NORTH_EAST 4u
+
+#define INVENTORY_START_COUNT 1u
 
 #define ROBOT_FACE_RIGHT 0u
 #define ROBOT_FACE_LEFT  1u
@@ -91,6 +98,12 @@
 #define NORTH_DOOR_HOTSPOT_X_MAX 40u
 #define NORTH_LOCKED_DOOR_HOTSPOT_X_MIN 128u
 #define NORTH_LOCKED_DOOR_HOTSPOT_X_MAX 160u
+#define NORTH_EAST_CRATE_X 16u
+#define NORTH_EAST_CRATE_Y 12u
+#define NORTH_EAST_CRATE_HOTSPOT_X_MIN 120u
+#define NORTH_EAST_CRATE_HOTSPOT_X_MAX 152u
+
+#define INVENTORY_ACCESS_CARD_COUNT 2u
 
 #define HOTSPOT_COUNT ((uint8_t)(sizeof(hotspots) / sizeof(hotspots[0])))
 #define DOOR_COUNT ((uint8_t)(sizeof(doors) / sizeof(doors[0])))
@@ -114,6 +127,14 @@ typedef struct door_t {
     uint8_t dest_room;
     uint8_t dest_x;
 } door_t;
+
+typedef struct inventory_item_t {
+    const char *name_row;
+    const char *inspect_line_0;
+    const char *inspect_line_1;
+    const char *use_line_0;
+    const char *use_line_1;
+} inventory_item_t;
 
 static const char opening_0[] =
     "@ CHECKPOINT\n"
@@ -190,6 +211,30 @@ static const door_t doors[] = {
         DOOR_ACTION_LOCKED,
         ROOM_NORTH,
         NORTH_LOCKED_DOOR_HOTSPOT_X_MIN
+    }
+};
+
+static const inventory_item_t inventory_items[] = {
+    {
+        "COIN",
+        "(5 MXN)",
+        "",
+        "IT CLINKS",
+        ""
+    },
+    {
+        "ACCESS CARD",
+        "OLD ACCESS CARD",
+        "ID: MAINT 03",
+        "CARD HAS NO READER",
+        "NEARBY"
+    },
+    {
+        "DRAINED CELL",
+        "DRAINED POWER CELL",
+        "IT IS COLD",
+        "NO POWER PORT",
+        "NEARBY"
     }
 };
 
@@ -313,6 +358,8 @@ static void build_room_map(uint8_t room) {
     if (room == ROOM_WEST) {
         room_put_crate(2u, 12u);
         room_put_crate(16u, 12u);
+    } else if (room == ROOM_NORTH_EAST) {
+        room_put_crate(NORTH_EAST_CRATE_X, NORTH_EAST_CRATE_Y);
     }
 
     for (i = 0u; i < DOOR_COUNT; ++i) {
@@ -329,6 +376,12 @@ static void build_room_map(uint8_t room) {
 static void draw_room(uint8_t room) {
     build_room_map(room);
     set_bkg_tiles(0, 0, ROOM_W, ROOM_H, room_map);
+}
+
+static void enter_room(uint8_t *room, uint8_t next_room, uint8_t *robot_x, uint8_t next_x) {
+    *room = next_room;
+    *robot_x = next_x;
+    draw_room(*room);
 }
 
 static uint8_t find_door(uint8_t room, uint8_t x) {
@@ -352,6 +405,10 @@ static void draw_status(uint8_t room, uint8_t prompt) {
         window_draw_row(FONT_TILE_BASE, 0, "BUILDING C EAST");
     } else if (room == ROOM_NORTH) {
         window_draw_row(FONT_TILE_BASE, 0, "BUILDING C NORTH");
+    } else if (room == ROOM_NORTH_WEST) {
+        window_draw_row(FONT_TILE_BASE, 0, "BUILDING C N/WEST");
+    } else if (room == ROOM_NORTH_EAST) {
+        window_draw_row(FONT_TILE_BASE, 0, "BUILDING C N/EAST");
     } else {
         window_draw_row(FONT_TILE_BASE, 0, "BUILDING C WEST");
     }
@@ -398,8 +455,197 @@ static void show_locked_status(
     *shown_prompt = STATUS_PROMPT_LOCKED;
 }
 
-static void inspect_at(uint8_t room, uint8_t x) {
+static void clear_fullscreen_window(void) {
+    typewriter_clear_box(FONT_TILE_BASE, 0u, 0u, WIN_W, FULLSCREEN_WIN_H);
+}
+
+static void draw_inventory_empty(const char *line_2, const char *line_3) {
+    clear_fullscreen_window();
+    window_draw_row(FONT_TILE_BASE, 0, "INVENTORY");
+    window_draw_row(FONT_TILE_BASE, 3, "EMPTY");
+    window_draw_row(FONT_TILE_BASE, 6, line_2);
+    window_draw_row(FONT_TILE_BASE, 16, line_3);
+}
+
+static void draw_inventory_item_row(uint8_t y, const char *name, uint8_t selected) {
+    uint8_t row[WIN_W];
     uint8_t i;
+    uint8_t name_i = 0u;
+
+    for (i = 0u; i < WIN_W; ++i) {
+        row[i] = tiny_font_tile_for_char(FONT_TILE_BASE, ' ');
+    }
+
+    row[0] = tiny_font_tile_for_char(FONT_TILE_BASE, selected ? '>' : ' ');
+
+    for (i = 2u; i < WIN_W && name[name_i] != '\0'; ++i) {
+        row[i] = tiny_font_tile_for_char(FONT_TILE_BASE, name[name_i]);
+        ++name_i;
+    }
+
+    set_win_tiles(0u, y, WIN_W, 1u, row);
+}
+
+static void draw_inventory_menu(uint8_t selected_item, uint8_t item_count) {
+    uint8_t i;
+
+    if (item_count == 0u) {
+        draw_inventory_empty("NO ITEMS", "SELECT:CLOSE");
+        return;
+    }
+
+    if (selected_item >= item_count) {
+        selected_item = 0u;
+    }
+
+    clear_fullscreen_window();
+    window_draw_row(FONT_TILE_BASE, 0, "INVENTORY");
+    for (i = 0u; i < item_count; ++i) {
+        draw_inventory_item_row(
+            (uint8_t)(3u + i),
+            inventory_items[i].name_row,
+            (uint8_t)(i == selected_item)
+        );
+    }
+    window_draw_row(FONT_TILE_BASE, 12, "a:INSPECT b:USE");
+    window_draw_row(FONT_TILE_BASE, 14, "^v ITEM");
+    window_draw_row(FONT_TILE_BASE, 16, "SELECT:CLOSE");
+}
+
+static void draw_inventory_inspect(uint8_t selected_item, uint8_t item_count) {
+    if (item_count == 0u) {
+        draw_inventory_empty("NOTHING TO INSPECT", "SELECT:CLOSE");
+        return;
+    }
+
+    if (selected_item >= item_count) {
+        selected_item = 0u;
+    }
+
+    clear_fullscreen_window();
+    window_draw_row(FONT_TILE_BASE, 0, "INVENTORY");
+    window_draw_row(FONT_TILE_BASE, 3, inventory_items[selected_item].name_row);
+    window_draw_row(FONT_TILE_BASE, 6, inventory_items[selected_item].inspect_line_0);
+    window_draw_row(FONT_TILE_BASE, 7, inventory_items[selected_item].inspect_line_1);
+    window_draw_row(FONT_TILE_BASE, 16, "SELECT:CLOSE");
+}
+
+static void draw_inventory_use(uint8_t selected_item, uint8_t item_count) {
+    if (item_count == 0u) {
+        draw_inventory_empty("NOTHING TO USE", "SELECT:CLOSE");
+        return;
+    }
+
+    if (selected_item >= item_count) {
+        selected_item = 0u;
+    }
+
+    clear_fullscreen_window();
+    window_draw_row(FONT_TILE_BASE, 0, "INVENTORY");
+    window_draw_row(FONT_TILE_BASE, 3, inventory_items[selected_item].name_row);
+    window_draw_row(FONT_TILE_BASE, 6, inventory_items[selected_item].use_line_0);
+    window_draw_row(FONT_TILE_BASE, 7, inventory_items[selected_item].use_line_1);
+    window_draw_row(FONT_TILE_BASE, 16, "SELECT:CLOSE");
+}
+
+static void inventory_select_prev(uint8_t *selected_item, uint8_t item_count) {
+    if (item_count == 0u) {
+        return;
+    }
+
+    if (*selected_item == 0u || *selected_item >= item_count) {
+        *selected_item = item_count - 1u;
+    } else {
+        --(*selected_item);
+    }
+}
+
+static void inventory_select_next(uint8_t *selected_item, uint8_t item_count) {
+    if (item_count == 0u) {
+        return;
+    }
+
+    ++(*selected_item);
+
+    if (*selected_item >= item_count) {
+        *selected_item = 0u;
+    }
+}
+
+static void handle_inventory_input(
+    uint8_t joy,
+    uint8_t prev_joy,
+    uint8_t *selected_item,
+    uint8_t item_count
+) {
+    if (
+        ((joy & J_LEFT) && !(prev_joy & J_LEFT)) ||
+        ((joy & J_UP) && !(prev_joy & J_UP))
+    ) {
+        inventory_select_prev(selected_item, item_count);
+        draw_inventory_menu(*selected_item, item_count);
+    } else if (
+        ((joy & J_RIGHT) && !(prev_joy & J_RIGHT)) ||
+        ((joy & J_DOWN) && !(prev_joy & J_DOWN))
+    ) {
+        inventory_select_next(selected_item, item_count);
+        draw_inventory_menu(*selected_item, item_count);
+    } else if ((joy & J_A) && !(prev_joy & J_A)) {
+        draw_inventory_inspect(*selected_item, item_count);
+    } else if ((joy & J_B) && !(prev_joy & J_B)) {
+        draw_inventory_use(*selected_item, item_count);
+    }
+}
+
+static void open_inventory(uint8_t *selected_item, uint8_t item_count) {
+    if (item_count == 0u || *selected_item >= item_count) {
+        *selected_item = 0u;
+    }
+
+    move_win(7, INVENTORY_WIN_Y);
+    HIDE_SPRITES;
+    draw_inventory_menu(*selected_item, item_count);
+}
+
+static void close_inventory(
+    uint8_t room,
+    uint8_t robot_x,
+    uint8_t *shown_room,
+    uint8_t *shown_prompt
+) {
+    move_win(7, STATUS_WIN_Y);
+    SHOW_SPRITES;
+    *shown_room = 0xFFu;
+    *shown_prompt = STATUS_PROMPT_NONE;
+    update_status_if_changed(room, robot_x, shown_room, shown_prompt);
+}
+
+static uint8_t inspect_north_east_crate(uint8_t x, uint8_t *inventory_count) {
+    if (
+        x < NORTH_EAST_CRATE_HOTSPOT_X_MIN ||
+        x > NORTH_EAST_CRATE_HOTSPOT_X_MAX
+    ) {
+        return 0u;
+    }
+
+    if (*inventory_count < INVENTORY_ACCESS_CARD_COUNT) {
+        *inventory_count = INVENTORY_ACCESS_CARD_COUNT;
+        window_draw_row(FONT_TILE_BASE, 0, "ACCESS CARD");
+        window_draw_row(FONT_TILE_BASE, 1, "ADDED TO INVENTORY");
+    } else {
+        window_draw_row(FONT_TILE_BASE, 0, "CRATE EMPTY");
+        window_draw_row(FONT_TILE_BASE, 1, "CARD ALREADY TAKEN");
+    }
+
+    return 1u;
+}
+
+static void inspect_at(uint8_t room, uint8_t x, uint8_t *inventory_count) {
+    uint8_t i;
+
+    if (room == ROOM_NORTH_EAST && inspect_north_east_crate(x, inventory_count)) {
+        return;
+    }
 
     for (i = 0u; i < HOTSPOT_COUNT; ++i) {
         const hotspot_t *hotspot = &hotspots[i];
@@ -420,7 +666,6 @@ static void inspect_at(uint8_t room, uint8_t x) {
 }
 
 void main(void) {
-    music_play_building();
     uint8_t robot_x = 80u;
     uint8_t room = ROOM_WEST;
     uint8_t robot_facing = ROBOT_FACE_RIGHT;
@@ -433,6 +678,10 @@ void main(void) {
     uint8_t door_index;
     uint8_t shown_room = 0xFFu;
     uint8_t shown_prompt = STATUS_PROMPT_NONE;
+    uint8_t inventory_open = 0u;
+    uint8_t inventory_count = INVENTORY_START_COUNT;
+    uint8_t inventory_selected = 0u;
+    uint8_t inventory_toggled;
 
     BGP_REG = 0xE4;
     OBP0_REG = 0xE4;
@@ -471,7 +720,7 @@ void main(void) {
     set_sprite_data(ROBOT_TILE_BASE, robot_TILE_COUNT, robot_tiles);
 
     /* Bottom dialogue/status window */
-    move_win(7, 128);
+    move_win(7, STATUS_WIN_Y);
     window_clear(FONT_TILE_BASE);
     update_status_if_changed(room, robot_x, &shown_room, &shown_prompt);
 
@@ -479,22 +728,48 @@ void main(void) {
     SHOW_WIN;
     SHOW_SPRITES;
     DISPLAY_ON;
+    music_play_building();
 
     while (1) {
         wait_vbl_done();
         
         joy = joypad();
         moving = 0u;
+        inventory_toggled = 0u;
 
-        if (joy & J_LEFT) {
+        if ((joy & J_SELECT) && !(prev_joy & J_SELECT)) {
+            inventory_toggled = 1u;
+
+            if (inventory_open) {
+                inventory_open = 0u;
+                close_inventory(room, robot_x, &shown_room, &shown_prompt);
+            } else {
+                inventory_open = 1u;
+                anim_timer = 0u;
+                robot_frame = 0u;
+                open_inventory(&inventory_selected, inventory_count);
+            }
+        }
+
+        if (inventory_open) {
+            if (!inventory_toggled) {
+                handle_inventory_input(joy, prev_joy, &inventory_selected, inventory_count);
+            }
+        } else if (!inventory_toggled && (joy & J_LEFT)) {
             if (robot_x > ROBOT_MIN_X) {
                 robot_x--;
                 moving = 1u;
                 robot_facing = ROBOT_FACE_LEFT;
             } else if (room == ROOM_EAST) {
-                room = ROOM_WEST;
-                robot_x = ROBOT_MAX_X;
-                draw_room(room);
+                enter_room(&room, ROOM_WEST, &robot_x, ROBOT_MAX_X);
+                moving = 1u;
+                robot_facing = ROBOT_FACE_LEFT;
+            } else if (room == ROOM_NORTH) {
+                enter_room(&room, ROOM_NORTH_WEST, &robot_x, ROBOT_MAX_X);
+                moving = 1u;
+                robot_facing = ROBOT_FACE_LEFT;
+            } else if (room == ROOM_NORTH_EAST) {
+                enter_room(&room, ROOM_NORTH, &robot_x, ROBOT_MAX_X);
                 moving = 1u;
                 robot_facing = ROBOT_FACE_LEFT;
             }
@@ -504,15 +779,21 @@ void main(void) {
             }
         }
 
-        if (joy & J_RIGHT) {
+        if (!inventory_open && !inventory_toggled && (joy & J_RIGHT)) {
             if (robot_x < ROBOT_MAX_X) {
                 robot_x++;
                 moving = 1u;
                 robot_facing = ROBOT_FACE_RIGHT;
             } else if (room == ROOM_WEST) {
-                room = ROOM_EAST;
-                robot_x = ROBOT_MIN_X;
-                draw_room(room);
+                enter_room(&room, ROOM_EAST, &robot_x, ROBOT_MIN_X);
+                moving = 1u;
+                robot_facing = ROBOT_FACE_RIGHT;
+            } else if (room == ROOM_NORTH) {
+                enter_room(&room, ROOM_NORTH_EAST, &robot_x, ROBOT_MIN_X);
+                moving = 1u;
+                robot_facing = ROBOT_FACE_RIGHT;
+            } else if (room == ROOM_NORTH_WEST) {
+                enter_room(&room, ROOM_NORTH, &robot_x, ROBOT_MIN_X);
                 moving = 1u;
                 robot_facing = ROBOT_FACE_RIGHT;
             }
@@ -522,7 +803,7 @@ void main(void) {
             }
         }
 
-        if ((joy & J_A) && !(prev_joy & J_A)) {
+        if (!inventory_open && !inventory_toggled && (joy & J_A) && !(prev_joy & J_A)) {
             door_index = find_door(room, robot_x);
 
             if (
@@ -536,12 +817,12 @@ void main(void) {
             } else if (door_index != DOOR_INDEX_NONE) {
                 show_locked_status(room, &shown_room, &shown_prompt);
             } else {
-                inspect_at(room, robot_x);
+                inspect_at(room, robot_x, &inventory_count);
                 shown_prompt = STATUS_PROMPT_NONE;
             }
         }
 
-        if ((joy & J_START) && !(prev_joy & J_START)) {
+        if (!inventory_open && !inventory_toggled && (joy & J_START) && !(prev_joy & J_START)) {
             room = ROOM_WEST;
             robot_x = 80u;
             robot_facing = ROBOT_FACE_RIGHT;

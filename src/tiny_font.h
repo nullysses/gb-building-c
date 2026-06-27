@@ -3,8 +3,8 @@
 
 #include <stdint.h>
 
-#define TINY_FONT_TILE_COUNT 55
-#define TINY_FONT_CHARS " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/:.-!?@ab+<>^vx*se"
+#define TINY_FONT_TILE_COUNT 57
+#define TINY_FONT_CHARS " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/:.-!?@ab+<>^vx*se()"
 
 extern const uint8_t tiny_font_tiles[];
 
